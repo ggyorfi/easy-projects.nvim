@@ -1,0 +1,30 @@
+# CLAUDE.md - AI assistant configuration
+CLAUDE.md
+
+# Neovim plugin development
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test projects and example state
+test-projects/
+example-projects/
+.easy/
+
+# Temporary files
+*.tmp
+*.temp
