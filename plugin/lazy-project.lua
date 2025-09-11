@@ -46,6 +46,32 @@ vim.api.nvim_create_user_command("EasyCloseAllSaved", function()
   end
 end, { desc = "Close all unmodified buffers" })
 
+vim.api.nvim_create_user_command("EasyToggleExplorer", function()
+  -- Get saved explorer width from project config
+  local cwd = vim.fn.getcwd()
+  local config = require("easy-projects.config").read(cwd)
+  local saved_width = config.ui and config.ui.explorer_width
+  
+  if not _G.Snacks or not _G.Snacks.explorer then
+    vim.notify("Snacks explorer not available", vim.log.levels.WARN)
+    return
+  end
+  
+  if saved_width then
+    -- Open explorer with saved width
+    _G.Snacks.explorer({
+      layout = {
+        layout = {
+          width = saved_width
+        }
+      }
+    })
+  else
+    -- Fallback to default
+    _G.Snacks.explorer()
+  end
+end, { desc = "Toggle explorer with saved width" })
+
 -- Create autocmd group for plugin events
 vim.api.nvim_create_augroup("EasyProjects", { clear = true })
 
