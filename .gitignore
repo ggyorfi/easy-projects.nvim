@@ -1,5 +1,6 @@
-# CLAUDE.md - AI assistant configuration
+#EXPLORER_PATH_TODO CLAUDE.md - AI assistant configuration
 CLAUDE.md
+.claude/
 
 # Neovim plugin development
 *.log

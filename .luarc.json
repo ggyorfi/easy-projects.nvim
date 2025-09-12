@@ -1,0 +1,15 @@
+{
+  "runtime.version": "LuaJIT",
+  "workspace.checkThirdParty": false,
+  "workspace.library": [
+    "$VIMRUNTIME"
+  ],
+  "completion.callSnippet": "Replace",
+  "diagnostics.globals": ["vim", "Snacks"],
+  "diagnostics.disable": [
+    "duplicate-set-field",
+    "trailing-space",
+    "unused-function",
+    "unused-local"
+  ]
+}

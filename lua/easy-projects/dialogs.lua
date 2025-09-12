@@ -20,7 +20,7 @@ function M.show_batch_conflicts(conflicts, callback)
 	local options = {
 		"Use Disk versions (lose stashed changes)",
 		"Use Stashed versions (restore modified files)",
-		"Review each file individually"
+		"Review each file individually",
 	}
 
 	local prompt = string.format("%d files have conflicts. Choose action:", conflict_count)
@@ -45,7 +45,7 @@ function M.show_batch_conflicts(conflicts, callback)
 			end
 			callback(resolutions)
 		elseif choice:match("^Use Stashed") then
-			-- Use stashed versions  
+			-- Use stashed versions
 			for relative_path, _ in pairs(conflicts) do
 				resolutions[relative_path] = "stashed"
 			end
@@ -78,12 +78,11 @@ function M.show_individual_conflicts(conflicts, callback)
 
 		local options = {
 			"Use Disk version",
-			"Use Stashed version", 
-			"Skip remaining files"
+			"Use Stashed version",
+			"Skip remaining files",
 		}
 
-		local prompt = string.format("File %d/%d: %s%s", 
-			current_index, #conflict_files, relative_path, status)
+		local prompt = string.format("File %d/%d: %s%s", current_index, #conflict_files, relative_path, status)
 
 		vim.ui.select(options, {
 			prompt = prompt,
