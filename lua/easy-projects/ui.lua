@@ -1,6 +1,7 @@
 ---@class EasyProjects.UI
 ---@field get_explorer_info fun(): {open: boolean, width: integer?}
 ---@field restore_explorer fun(config: table): nil
+---@field restore_active_file fun(project_path: string, active_file: string?, files_opened: integer): nil
 local M = {}
 
 local utils = require("easy-projects.utils")
@@ -152,6 +153,57 @@ function M.open_files(project_path, files)
 	end
 
 	return files_opened
+end
+
+--- Restore the active file from saved state
+---@param project_path string The project directory path
+---@param active_file string? Relative path to the file that should be active
+---@param files_opened integer Number of files that were opened
+function M.restore_active_file(project_path, active_file, files_opened)
+	if not active_file or files_opened == 0 then
+		return
+	end
+
+	local full_path = project_path .. "/" .. active_file
+
+	-- Check if file exists and is readable
+	if utils.is_readable(full_path) then
+		-- Find buffer for this file and switch to it
+		for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+			if vim.api.nvim_buf_is_loaded(buf) then
+				local bufname = vim.api.nvim_buf_get_name(buf)
+				if bufname == full_path then
+					utils.switch_to_buffer(buf)
+					M.focus_editor_window()
+					return
+				end
+			end
+		end
+
+		-- If buffer not found, open the file (it might not have been in the files list)
+		vim.cmd("edit " .. utils.escape_path(full_path))
+		M.focus_editor_window()
+	end
+end
+
+--- Focus the editor window (move cursor away from explorer)
+function M.focus_editor_window()
+	-- Find the first non-explorer window and focus it
+	for _, win in ipairs(vim.api.nvim_list_wins()) do
+		local buf = vim.api.nvim_win_get_buf(win)
+		local ok, filetype = pcall(vim.api.nvim_get_option_value, "filetype", { buf = buf })
+		if ok then
+			-- Skip explorer windows
+			if not (filetype == "snacks_explorer" or filetype == "snacks_layout_box") then
+				local bufname = vim.api.nvim_buf_get_name(buf)
+				-- Also skip snacks:// buffers and other special buffers
+				if not (bufname:match("snacks://") or bufname:match("explorer")) then
+					vim.api.nvim_set_current_win(win)
+					return
+				end
+			end
+		end
+	end
 end
 
 --- Create empty buffer if needed (when no files to restore)

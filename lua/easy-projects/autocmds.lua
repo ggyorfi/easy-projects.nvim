@@ -113,6 +113,16 @@ function M.enable_tracking()
 		end,
 	})
 
+	-- Track active file changes
+	vim.api.nvim_create_autocmd({ "BufEnter" }, {
+		group = vim.api.nvim_create_augroup("EasyProjectsActiveTracker", { clear = true }),
+		callback = function()
+			if current_loaded_project then
+				state.update_active_file(current_loaded_project)
+			end
+		end,
+	})
+
 	-- Track explorer resize separately (only for explorer width)
 	vim.api.nvim_create_autocmd({ "VimResized", "WinResized" }, {
 		group = vim.api.nvim_create_augroup("EasyProjectsExplorerResize", { clear = true }),

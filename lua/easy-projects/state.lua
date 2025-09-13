@@ -9,6 +9,24 @@ local config = require("easy-projects.config")
 local ui = require("easy-projects.ui")
 local diffs = require("easy-projects.diffs")
 
+--- Update the tracked active file when a file buffer becomes active
+---@param project_path string The project directory path
+function M.update_active_file(project_path)
+	local current_buf = vim.api.nvim_get_current_buf()
+	local bufname = vim.api.nvim_buf_get_name(current_buf)
+
+	-- Only track if current buffer is a file in this project
+	if bufname ~= "" then
+		local relative_path = utils.to_relative_path(bufname, project_path)
+		if relative_path then
+			-- Store in config immediately
+			local project_config = config.read(project_path)
+			project_config.active_file = relative_path
+			config.write(project_path, project_config)
+		end
+	end
+end
+
 --- Save current project state (UI and files)
 ---@param project_path string The project directory path
 function M.save(project_path)
@@ -26,6 +44,9 @@ function M.save(project_path)
 
 	-- Save open files (non-modified)
 	project_config.files = M.save_files(project_path)
+
+	-- Save active file
+	project_config.active_file = M.get_active_file(project_path)
 
 	-- Save modified files as diffs (only metadata in config)
 	project_config.modified_files = diffs.save_modified_as_diffs(project_path)
@@ -51,6 +72,19 @@ function M.save_files(project_path)
 	end
 
 	return files
+end
+
+--- Get the last active file relative to project path
+--- Returns the tracked active file, or current buffer if it's a project file
+---@param project_path string The project directory path
+---@return string? active_file Relative path of active file, or nil if none tracked
+function M.get_active_file(project_path)
+	-- First, update tracking with current buffer if it's a project file
+	M.update_active_file(project_path)
+
+	-- Return the active file from config
+	local project_config = config.read(project_path)
+	return project_config.active_file
 end
 
 --- Get list of current file buffer IDs for closing later
@@ -81,6 +115,11 @@ function M.restore(project_path)
 
 	-- Restore regular files
 	local files_opened = ui.open_files(project_path, project_config.files or {})
+
+	-- Restore active file if it exists (deferred to ensure it happens after explorer)
+	vim.defer_fn(function()
+		ui.restore_active_file(project_path, project_config.active_file, files_opened)
+	end, 150) -- Slightly longer than explorer restoration delay
 
 	-- Ensure we have an editor pane
 	ui.ensure_editor_pane(files_opened)
