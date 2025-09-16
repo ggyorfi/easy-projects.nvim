@@ -29,6 +29,18 @@ vim.api.nvim_create_user_command("EasyEditProjects", function()
 	require("easy-projects").edit_projects()
 end, { desc = "Edit projects file" })
 
+-- Tab/buffer management commands
+vim.api.nvim_create_user_command("EasyCloseBuffer", function(opts)
+	if opts.bang then
+		require("easy-projects").force_close_tab()
+	else
+		require("easy-projects").close_tab()
+	end
+end, {
+	desc = "Close current buffer (use ! to force)",
+	bang = true
+})
+
 -- Easy commands for common tasks
 vim.api.nvim_create_user_command("EasyQuit", function()
 	vim.cmd("qa!")

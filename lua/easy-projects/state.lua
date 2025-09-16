@@ -54,19 +54,30 @@ function M.save(project_path)
 	config.write(project_path, project_config)
 end
 
---- Get list of open files relative to project path
+--- Get list of open files relative to project path (including unnamed buffers)
 ---@param project_path string The project directory path
----@return table files List of relative file paths
+---@return table files List of relative file paths and unnamed buffer identifiers
 function M.save_files(project_path)
 	local files = {}
 	local file_buffers = utils.get_file_buffers()
 
 	for _, buf in ipairs(file_buffers) do
 		local bufname = vim.api.nvim_buf_get_name(buf)
+		local buftype = vim.api.nvim_get_option_value("buftype", { buf = buf })
+
 		if bufname ~= "" then
+			-- Handle named files
 			local relative_path = utils.to_relative_path(bufname, project_path)
 			if relative_path then
 				table.insert(files, relative_path)
+			end
+		else
+			-- Handle unnamed buffers (for tab restoration)
+			if buftype == "" then
+				-- Generate a unique identifier for tab restoration
+				local unnamed_id = "unnamed_" .. buf .. "_" .. os.time()
+				local unnamed_path = ".__unnamed_tab__/" .. unnamed_id
+				table.insert(files, unnamed_path)
 			end
 		end
 	end
@@ -75,10 +86,27 @@ function M.save_files(project_path)
 end
 
 --- Get the last active file relative to project path
---- Returns the tracked active file, or current buffer if it's a project file
+--- Returns the tracked active file, or current buffer if it's a project file, or special marker for unnamed
 ---@param project_path string The project directory path
----@return string? active_file Relative path of active file, or nil if none tracked
+---@return string? active_file Relative path of active file, "__unnamed__" for unnamed buffer, or nil if none tracked
 function M.get_active_file(project_path)
+	local current_buf = vim.api.nvim_get_current_buf()
+	local bufname = vim.api.nvim_buf_get_name(current_buf)
+	local buftype = vim.api.nvim_get_option_value("buftype", { buf = current_buf })
+
+	-- Check if current buffer is an unnamed buffer
+	if bufname == "" and buftype == "" then
+		-- Get content hash to identify this specific unnamed buffer
+		local lines = vim.api.nvim_buf_get_lines(current_buf, 0, -1, false)
+		local content_hash = vim.fn.sha256(table.concat(lines, "\n")):sub(1, 12)
+
+		-- Store special marker with content hash for unnamed buffer
+		local project_config = config.read(project_path)
+		project_config.active_file = "__unnamed__:" .. content_hash
+		config.write(project_path, project_config)
+		return "__unnamed__:" .. content_hash
+	end
+
 	-- First, update tracking with current buffer if it's a project file
 	M.update_active_file(project_path)
 
@@ -116,17 +144,17 @@ function M.restore(project_path)
 	-- Restore regular files
 	local files_opened = ui.open_files(project_path, project_config.files or {})
 
-	-- Restore active file if it exists (deferred to ensure it happens after explorer)
-	vim.defer_fn(function()
-		ui.restore_active_file(project_path, project_config.active_file, files_opened)
-	end, 150) -- Slightly longer than explorer restoration delay
-
 	-- Ensure we have an editor pane
 	ui.ensure_editor_pane(files_opened)
 
 	-- Restore modified files from diffs with conflict resolution (deferred to avoid UI conflicts)
 	vim.defer_fn(function()
 		diffs.restore_from_diffs(project_path, project_config.modified_files)
+
+		-- Restore active file AFTER diffs are restored (so unnamed buffers exist)
+		vim.defer_fn(function()
+			ui.restore_active_file(project_path, project_config.active_file, files_opened)
+		end, 50) -- Small additional delay after diffs restoration
 	end, 200) -- 200ms delay to let UI settle
 
 	return files_opened

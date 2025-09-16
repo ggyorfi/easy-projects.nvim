@@ -147,9 +147,20 @@ function M.save_modified_as_diffs(project_path)
 	local diffs_dir = config.get_diffs_dir(project_path)
 
 	for _, buf in ipairs(file_buffers) do
-		if vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_get_option_value("modified", { buf = buf }) then
-			local bufname = vim.api.nvim_buf_get_name(buf)
+		local is_modified = vim.api.nvim_get_option_value("modified", { buf = buf })
+		local bufname = vim.api.nvim_buf_get_name(buf)
+		local buftype = vim.api.nvim_get_option_value("buftype", { buf = buf })
+
+
+		if vim.api.nvim_buf_is_valid(buf) and is_modified then
+
+			-- Skip special buffer types (terminal, help, etc.)
+			if buftype ~= "" and buftype ~= "nofile" then
+				goto continue
+			end
+
 			if bufname ~= "" then
+				-- Handle named files
 				local relative_path = utils.to_relative_path(bufname, project_path)
 				if relative_path then
 					-- Get buffer content
@@ -180,8 +191,42 @@ function M.save_modified_as_diffs(project_path)
 						end
 					end
 				end
+			else
+				-- Handle unnamed buffers
+				local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+
+				-- Skip empty unnamed buffers
+				if #lines == 1 and lines[1] == "" then
+					goto continue
+				end
+
+				-- Generate a unique name for this unnamed buffer
+				local unnamed_id = "unnamed_" .. buf .. "_" .. os.time()
+				local unnamed_path = ".__unnamed__/" .. unnamed_id
+
+				-- Store content directly (no diff needed for unnamed buffers)
+				local content_hash = vim.fn.sha256(table.concat(lines, "\n")):sub(1, 12)
+				local content_file_path = diffs_dir .. "/" .. content_hash .. ".content"
+
+				-- Write content to file
+				local content_file = io.open(content_file_path, "w")
+				if content_file then
+					for _, line in ipairs(lines) do
+						content_file:write(line .. "\n")
+					end
+					content_file:close()
+
+					-- Store metadata for unnamed buffer
+					modified_files[unnamed_path] = {
+						content_hash = content_hash,
+						is_unnamed = true,
+						buf_id = buf,
+						timestamp = os.time(),
+					}
+				end
 			end
 		end
+		::continue::
 	end
 
 	return modified_files
@@ -223,6 +268,12 @@ function M.restore_from_diffs(project_path, modified_files)
 	local valid_files = {}
 
 	for relative_path, file_data in pairs(modified_files) do
+		-- Handle unnamed buffers (no conflicts possible)
+		if file_data.is_unnamed then
+			valid_files[relative_path] = file_data
+			goto continue
+		end
+
 		local absolute_path = project_path .. "/" .. relative_path
 
 		-- Skip if this is old format (has 'lines' instead of 'diff_hash')
@@ -285,39 +336,93 @@ function M.restore_valid_files(project_path, valid_files)
 	local diffs_dir = config.get_diffs_dir(project_path)
 
 	for relative_path, file_data in pairs(valid_files) do
-		local absolute_path = project_path .. "/" .. relative_path
+		if file_data.is_unnamed then
+			-- Handle unnamed buffer restoration
+			local content_file_path = diffs_dir .. "/" .. file_data.content_hash .. ".content"
+			local content_file = io.open(content_file_path, "r")
+			if not content_file then
+				goto continue_restore
+			end
 
-		-- Read diff file
-		local diff_file_path = diffs_dir .. "/" .. file_data.diff_hash .. ".diff"
-		local diff_file = io.open(diff_file_path, "r")
-		if not diff_file then
-			goto continue_restore
+			local content = content_file:read("*all")
+			content_file:close()
+
+			-- Split content into lines
+			local lines = vim.split(content, "\n")
+			-- Remove last empty line if it exists
+			if lines[#lines] == "" then
+				table.remove(lines)
+			end
+
+			-- Try to find an existing empty unnamed buffer first (from tab restoration)
+			local target_buf = nil
+			for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+				if vim.api.nvim_buf_is_loaded(buf) then
+					local bufname = vim.api.nvim_buf_get_name(buf)
+					local buftype = vim.api.nvim_get_option_value("buftype", { buf = buf })
+					local is_modified = vim.api.nvim_get_option_value("modified", { buf = buf })
+					if bufname == "" and buftype == "" and not is_modified then
+						-- Check if buffer is empty
+						local existing_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+						if #existing_lines == 1 and existing_lines[1] == "" then
+							target_buf = buf
+							break
+						end
+					end
+				end
+			end
+
+			-- If no empty buffer found, create new one
+			if not target_buf then
+				target_buf = vim.api.nvim_create_buf(true, false)
+				if target_buf and target_buf ~= 0 then
+					vim.api.nvim_set_option_value("buftype", "", { buf = target_buf })
+				end
+			end
+
+			if target_buf and target_buf ~= 0 then
+				-- Set the restored content
+				vim.api.nvim_buf_set_lines(target_buf, 0, -1, false, lines)
+
+				-- Mark as modified
+				vim.api.nvim_set_option_value("modified", true, { buf = target_buf })
+			end
+		else
+			-- Handle named file restoration (existing logic)
+			local absolute_path = project_path .. "/" .. relative_path
+
+			-- Read diff file
+			local diff_file_path = diffs_dir .. "/" .. file_data.diff_hash .. ".diff"
+			local diff_file = io.open(diff_file_path, "r")
+			if not diff_file then
+				goto continue_restore
+			end
+
+			local diff_content = diff_file:read("*all")
+			diff_file:close()
+
+			-- Apply diff to get restored content
+			local restored_lines = apply_diff(absolute_path, diff_content)
+			if not restored_lines then
+				goto continue_restore
+			end
+
+			-- Create or get buffer
+			local buf = vim.fn.bufnr(absolute_path, true)
+
+			-- Load the file first if it exists
+			if utils.is_readable(absolute_path) then
+				vim.api.nvim_buf_call(buf, function()
+					vim.cmd("edit " .. vim.fn.fnameescape(absolute_path))
+				end)
+			end
+
+			-- Set the restored content
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, restored_lines)
+
+			-- Mark as modified
+			vim.api.nvim_set_option_value("modified", true, { buf = buf })
 		end
-
-		local diff_content = diff_file:read("*all")
-		diff_file:close()
-
-		-- Apply diff to get restored content
-		local restored_lines = apply_diff(absolute_path, diff_content)
-		if not restored_lines then
-			goto continue_restore
-		end
-
-		-- Create or get buffer
-		local buf = vim.fn.bufnr(absolute_path, true)
-
-		-- Load the file first if it exists
-		if utils.is_readable(absolute_path) then
-			vim.api.nvim_buf_call(buf, function()
-				vim.cmd("edit " .. vim.fn.fnameescape(absolute_path))
-			end)
-		end
-
-		-- Set the restored content
-		vim.api.nvim_buf_set_lines(buf, 0, -1, false, restored_lines)
-
-		-- Mark as modified
-		vim.api.nvim_set_option_value("modified", true, { buf = buf })
 
 		::continue_restore::
 	end

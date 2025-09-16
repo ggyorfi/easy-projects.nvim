@@ -58,8 +58,8 @@ function M.to_relative_path(abs_path, base_path)
 	return nil
 end
 
---- Get all loaded file buffers
----@return table<integer> buffer_ids List of buffer IDs for loaded files
+--- Get all loaded file buffers (including unnamed buffers)
+---@return table<integer> buffer_ids List of buffer IDs for loaded files and unnamed buffers
 function M.get_file_buffers()
 	local buffers = {}
 	for _, buf in ipairs(vim.api.nvim_list_bufs()) do
@@ -67,8 +67,8 @@ function M.get_file_buffers()
 			local bufname = vim.api.nvim_buf_get_name(buf)
 			local buftype = vim.api.nvim_get_option_value("buftype", { buf = buf })
 
-			-- Only include real files (not special buffers)
-			if bufname ~= "" and buftype == "" then
+			-- Include real files AND unnamed buffers (normal buftype only)
+			if buftype == "" then
 				table.insert(buffers, buf)
 			end
 		end

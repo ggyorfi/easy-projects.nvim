@@ -134,9 +134,9 @@ function M.restore_explorer_now(config)
 	end
 end
 
---- Open files from file list
+--- Open files from file list (including unnamed buffer tabs)
 ---@param project_path string The project directory path
----@param files table List of relative file paths
+---@param files table List of relative file paths and unnamed buffer identifiers
 ---@return integer files_opened Number of files successfully opened
 function M.open_files(project_path, files)
 	if not files or #files == 0 then
@@ -145,10 +145,20 @@ function M.open_files(project_path, files)
 
 	local files_opened = 0
 	for _, file_path in ipairs(files) do
-		local full_path = project_path .. "/" .. file_path
-		if utils.is_readable(full_path) then
-			vim.cmd("edit " .. utils.escape_path(full_path))
-			files_opened = files_opened + 1
+		if file_path:match("^.__unnamed_tab__/") then
+			-- Create empty unnamed buffer for tab restoration
+			local buf = vim.api.nvim_create_buf(true, false)
+			if buf and buf ~= 0 then
+				vim.api.nvim_set_option_value("buftype", "", { buf = buf })
+				files_opened = files_opened + 1
+			end
+		else
+			-- Handle regular named files
+			local full_path = project_path .. "/" .. file_path
+			if utils.is_readable(full_path) then
+				vim.cmd("edit " .. utils.escape_path(full_path))
+				files_opened = files_opened + 1
+			end
 		end
 	end
 
@@ -157,10 +167,55 @@ end
 
 --- Restore the active file from saved state
 ---@param project_path string The project directory path
----@param active_file string? Relative path to the file that should be active
+---@param active_file string? Relative path to the file that should be active, or "__unnamed__" for unnamed buffer
 ---@param files_opened integer Number of files that were opened
 function M.restore_active_file(project_path, active_file, files_opened)
-	if not active_file or files_opened == 0 then
+	if not active_file then
+		return
+	end
+
+	-- Handle unnamed buffer activation
+	if active_file:match("^__unnamed__") then
+		-- Extract content hash from active_file (format: "__unnamed__:hash" or just "__unnamed__")
+		local target_hash = active_file:match("^__unnamed__:(.+)$")
+
+		if target_hash then
+			-- Find the specific unnamed buffer by content hash
+			for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+				if vim.api.nvim_buf_is_loaded(buf) then
+					local bufname = vim.api.nvim_buf_get_name(buf)
+					local buftype = vim.api.nvim_get_option_value("buftype", { buf = buf })
+					if bufname == "" and buftype == "" then
+						-- Check if this buffer's content matches the target hash
+						local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+						local content_hash = vim.fn.sha256(table.concat(lines, "\n")):sub(1, 12)
+						if content_hash == target_hash then
+							utils.switch_to_buffer(buf)
+							M.focus_editor_window()
+							return
+						end
+					end
+				end
+			end
+		else
+			-- Fallback for old format (just "__unnamed__") - find the first unnamed buffer
+			for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+				if vim.api.nvim_buf_is_loaded(buf) then
+					local bufname = vim.api.nvim_buf_get_name(buf)
+					local buftype = vim.api.nvim_get_option_value("buftype", { buf = buf })
+					if bufname == "" and buftype == "" then
+						utils.switch_to_buffer(buf)
+						M.focus_editor_window()
+						return
+					end
+				end
+			end
+		end
+		return
+	end
+
+	-- Handle named file activation (existing logic)
+	if files_opened == 0 then
 		return
 	end
 

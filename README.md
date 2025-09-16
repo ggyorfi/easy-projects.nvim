@@ -32,6 +32,8 @@ A sophisticated yet simple project manager that remembers your workspace state -
     { "<leader>qq", "<cmd>EasyQuit<cr>", desc = "Quit Neovim" },
     { "<leader>qc", "<cmd>EasyCloseAllSaved<cr>", desc = "Close All Saved Buffers" },
     { "<leader>qa", "<cmd>EasyAddProject<cr>", desc = "Add Current Project" },
+    { "<leader>bc", "<cmd>EasyCloseBuffer<cr>", desc = "Close Buffer" },
+    { "<leader>bC", "<cmd>EasyCloseBuffer!<cr>", desc = "Close Buffer (Force)" },
   },
   opts = {}, -- Use default configuration
 }
@@ -99,9 +101,18 @@ When switching projects, if files were modified on disk since you last worked on
 
 | Command | Description |
 |---------|-------------|
-| `:AddProject <path>` | Add project by path |
+| `:EasyAddProject <path>` | Add project by path |
 | `<leader>pa` | Add current directory |
 | `<leader>fp` | Open project picker |
+
+### Buffer Management
+
+| Command | Keymap | Description |
+|---------|--------|-------------|
+| `:EasyCloseBuffer` | `<leader>bc` | Close current buffer (safe) |
+| `:EasyCloseBuffer!` | `<leader>bC` | Close current buffer (force) |
+| `:EasyCloseAllSaved` | `<leader>qc` | Close all unmodified buffers |
+| `:EasyQuit` | `<leader>qq` | Quit Neovim without saving |
 
 ### Project Switching Flow
 
