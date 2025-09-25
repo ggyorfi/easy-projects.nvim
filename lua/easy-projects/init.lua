@@ -161,18 +161,13 @@ end
 function M._close_buffer_safely(target_buf, force)
 	-- Use the exact same function as your bufferline 'x' close buttons
 	if _G.Snacks and _G.Snacks.bufdelete then
+		local opts = { buf = target_buf }
 		if force then
-			-- For force close, pass force option to Snacks
-			local success = pcall(_G.Snacks.bufdelete, target_buf, { force = true })
-			if not success then
-				vim.notify("Failed to force close buffer", vim.log.levels.ERROR)
-			end
-		else
-			-- Regular close - let Snacks handle all the navigation and layout logic
-			local success = pcall(_G.Snacks.bufdelete, target_buf)
-			if not success then
-				vim.notify("Failed to close buffer", vim.log.levels.ERROR)
-			end
+			opts.force = true
+		end
+		local success = pcall(_G.Snacks.bufdelete, opts)
+		if not success then
+			vim.notify(force and "Failed to force close buffer" or "Failed to close buffer", vim.log.levels.ERROR)
 		end
 	else
 		-- Fallback if Snacks not available
