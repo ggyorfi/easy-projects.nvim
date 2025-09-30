@@ -58,7 +58,23 @@ local function auto_load_project()
 					require("easy-projects.projects").add(cwd)
 				end
 				current_loaded_project = cwd
+
+				-- Get initial buffer (Neovim's default empty buffer)
+				local initial_buf = vim.api.nvim_get_current_buf()
+
 				state.restore(cwd)
+
+				-- Close the initial empty buffer if it's different and empty
+				if vim.api.nvim_buf_is_valid(initial_buf) then
+					local current_buf = vim.api.nvim_get_current_buf()
+					if initial_buf ~= current_buf then
+						local bufname = vim.api.nvim_buf_get_name(initial_buf)
+						local modified = vim.api.nvim_get_option_value("modified", { buf = initial_buf })
+						if bufname == "" and not modified then
+							pcall(vim.api.nvim_buf_delete, initial_buf, { force = true })
+						end
+					end
+				end
 			end
 		elseif #args == 1 then
 			-- Started with one argument

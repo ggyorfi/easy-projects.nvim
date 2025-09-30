@@ -34,38 +34,41 @@ function M.switch_to_project(project_path)
 		return
 	end
 
-	-- Disable autocmds during project switching to avoid interference
-	autocmds.disable_tracking()
+	-- Schedule the actual switch to happen after picker closes
+	vim.schedule(function()
+		-- Disable autocmds during project switching to avoid interference
+		autocmds.disable_tracking()
 
-	-- Save current project state BEFORE switching (inside disabled autocmds)
-	local current_loaded_project = autocmds.get_loaded_project()
-	if current_loaded_project then
-		state.save(current_loaded_project)
-	end
+		-- Save current project state BEFORE switching (inside disabled autocmds)
+		local current_loaded_project = autocmds.get_loaded_project()
+		if current_loaded_project then
+			state.save(current_loaded_project)
+		end
 
-	-- Get list of old project buffers to close later
-	local old_buffers = state.get_old_buffers()
+		-- Get list of old project buffers to close later (after picker is closed)
+		local old_buffers = state.get_old_buffers()
 
-	-- Switch to new project directory FIRST
-	vim.cmd("cd " .. utils.escape_path(expanded_path))
+		-- Switch to new project directory FIRST
+		vim.cmd("cd " .. utils.escape_path(expanded_path))
 
-	-- Then restore new project's state
-	local files_opened = state.restore(expanded_path)
+		-- Then restore new project's state
+		local files_opened = state.restore(expanded_path)
 
-	-- Move this project to the top of the list (most recently used)
-	projects.move_to_top(project_path)
+		-- Move this project to the top of the list (most recently used)
+		projects.move_to_top(project_path)
 
-	-- Close old project buffers (still inside disabled autocmds)
-	state.close_old_buffers(old_buffers)
+		-- Close old project buffers (still inside disabled autocmds)
+		state.close_old_buffers(old_buffers)
 
-	-- Set the new project as loaded
-	autocmds.set_loaded_project(expanded_path)
+		-- Set the new project as loaded
+		autocmds.set_loaded_project(expanded_path)
 
-	-- Re-enable autocmds
-	autocmds.enable_tracking()
+		-- Re-enable autocmds
+		autocmds.enable_tracking()
 
-	-- Trigger User event for other plugins to react
-	vim.api.nvim_exec_autocmds("User", { pattern = "LazyProjectChanged" })
+		-- Trigger User event for other plugins to react
+		vim.api.nvim_exec_autocmds("User", { pattern = "LazyProjectChanged" })
+	end)
 end
 
 --- Open project picker

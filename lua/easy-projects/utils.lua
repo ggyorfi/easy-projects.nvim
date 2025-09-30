@@ -58,21 +58,51 @@ function M.to_relative_path(abs_path, base_path)
 	return nil
 end
 
---- Get all loaded file buffers (including unnamed buffers)
+--- Get all loaded file buffers (including unnamed buffers) in display order
 ---@return table<integer> buffer_ids List of buffer IDs for loaded files and unnamed buffers
 function M.get_file_buffers()
 	local buffers = {}
-	for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-		if vim.api.nvim_buf_is_loaded(buf) then
-			local bufname = vim.api.nvim_buf_get_name(buf)
-			local buftype = vim.api.nvim_get_option_value("buftype", { buf = buf })
 
-			-- Include real files AND unnamed buffers (normal buftype only)
-			if buftype == "" then
-				table.insert(buffers, buf)
+	-- Use default buffer list
+	local ordered_bufs = vim.api.nvim_list_bufs()
+
+	-- Filter for loaded file buffers
+	for _, buf in ipairs(ordered_bufs) do
+		if vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_buf_is_loaded(buf) then
+			-- Wrap in pcall to avoid errors during buffer operations
+			local success, buftype = pcall(vim.api.nvim_get_option_value, "buftype", { buf = buf })
+			if not success then
+				goto continue
 			end
+
+			-- Only include normal buftype (real files and unnamed buffers)
+			if buftype ~= "" then
+				goto continue
+			end
+
+			-- Exclude picker and other special buffers by filetype
+			local ok, filetype = pcall(vim.api.nvim_get_option_value, "filetype", { buf = buf })
+			if ok and filetype and filetype ~= "" then
+				if filetype:match("snacks") or filetype:match("fzf") or filetype:match("telescope") then
+					goto continue
+				end
+			end
+
+			-- Exclude special buffer names
+			local ok2, bufname = pcall(vim.api.nvim_buf_get_name, buf)
+			if not ok2 then
+				goto continue
+			end
+
+			if bufname and (bufname:match("snacks://") or bufname:match("fzf://") or bufname:match("telescope://")) then
+				goto continue
+			end
+
+			table.insert(buffers, buf)
+			::continue::
 		end
 	end
+
 	return buffers
 end
 
