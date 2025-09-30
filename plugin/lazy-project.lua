@@ -176,7 +176,7 @@ end, { desc = "Yank current file/folder path (relative)" })
 -- Yank absolute path
 vim.api.nvim_create_user_command("EasyYankAbsPath", function()
 	local path = nil
-	
+
 	-- Check if we're in Snacks explorer
 	if vim.bo.filetype == "snacks_picker_list" then
 		-- Try to get the current item from Snacks picker
@@ -189,20 +189,25 @@ vim.api.nvim_create_user_command("EasyYankAbsPath", function()
 				end
 			end
 		end
-		
+
 	else
 		-- Regular buffer - get current file absolute path
 		path = vim.fn.expand("%:p")
 	end
-	
+
 	if not path or path == "" then
 		vim.notify("No file or folder to yank path from", vim.log.levels.WARN)
 		return
 	end
-	
+
 	vim.fn.setreg("+", path)
 	vim.notify("Yanked absolute path: " .. path)
 end, { desc = "Yank current file/folder absolute path" })
+
+-- Move file from clipboard to current folder in explorer
+vim.api.nvim_create_user_command("EasyMoveToFolder", function()
+	require("easy-projects").move_file_to_folder()
+end, { desc = "Move file from clipboard (use EasyYankPath) to current folder in explorer" })
 
 -- Create autocmd group for plugin events
 vim.api.nvim_create_augroup("EasyProjects", { clear = true })

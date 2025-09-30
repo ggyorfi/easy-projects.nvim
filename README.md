@@ -34,6 +34,9 @@ A sophisticated yet simple project manager that remembers your workspace state -
     { "<leader>qa", "<cmd>EasyAddProject<cr>", desc = "Add Current Project" },
     { "<leader>bc", "<cmd>EasyCloseBuffer<cr>", desc = "Close Buffer" },
     { "<leader>bC", "<cmd>EasyCloseBuffer!<cr>", desc = "Close Buffer (Force)" },
+    { "<leader>fy", "<cmd>EasyYankPath<cr>", desc = "Yank Path" },
+    { "<leader>fa", "<cmd>EasyYankAbsPath<cr>", desc = "Yank Absolute Path" },
+    { "<leader>fm", "<cmd>EasyMoveToFolder<cr>", desc = "Move to Folder" },
   },
   opts = {}, -- Use default configuration
 }

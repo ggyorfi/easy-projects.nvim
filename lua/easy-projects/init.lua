@@ -182,6 +182,128 @@ function M._close_buffer_safely(target_buf, force)
 	end
 end
 
+--- Move a file from default register to current folder in Snacks explorer
+function M.move_file_to_folder()
+	-- Check if we're in Snacks explorer
+	local current_buf = vim.api.nvim_get_current_buf()
+	local filetype = vim.api.nvim_get_option_value("filetype", { buf = current_buf })
+
+	if filetype ~= "snacks_picker_list" then
+		vim.notify("Not in Snacks explorer (filetype: " .. (filetype or "nil") .. ")", vim.log.levels.WARN)
+		return
+	end
+
+	-- Get current item from Snacks picker (which is used for the explorer)
+	if not (_G.Snacks and _G.Snacks.picker) then
+		vim.notify("Snacks picker not available", vim.log.levels.ERROR)
+		return
+	end
+
+	local picker = _G.Snacks.picker.get()
+	if not picker or not picker[1] or not picker[1].list or not picker[1].list._current then
+		vim.notify("Could not get current item from explorer", vim.log.levels.ERROR)
+		return
+	end
+
+	local current_item = picker[1].list._current
+	if not current_item or not current_item.file then
+		vim.notify("No item selected", vim.log.levels.WARN)
+		return
+	end
+
+	-- Check if current item is a folder
+	local item_path = current_item.file
+	if vim.fn.isdirectory(item_path) == 0 then
+		vim.notify("Current selection is not a folder", vim.log.levels.WARN)
+		return
+	end
+
+	-- Get file path from clipboard register (where EasyYankPath stores it)
+	local source_path = vim.fn.getreg('+')
+	if not source_path or source_path == "" then
+		vim.notify("No path in clipboard register (use EasyYankPath first)", vim.log.levels.WARN)
+		return
+	end
+
+	-- Trim whitespace
+	source_path = source_path:match("^%s*(.-)%s*$")
+
+	-- Get project root
+	local project_root = vim.fn.getcwd()
+
+	-- Convert to absolute path
+	local source_absolute = project_root .. "/" .. source_path
+
+	-- Check if source file/folder exists
+	if vim.fn.filereadable(source_absolute) == 0 and vim.fn.isdirectory(source_absolute) == 0 then
+		vim.notify("Source path does not exist: " .. source_path, vim.log.levels.ERROR)
+		return
+	end
+
+	-- Get destination folder
+	local dest_folder = item_path
+
+	-- Check if trying to move a folder into itself or its subdirectory
+	if vim.fn.isdirectory(source_absolute) == 1 then
+		-- Normalize paths for comparison (remove trailing slashes)
+		local source_normalized = source_absolute:gsub("/$", "")
+		local dest_normalized = dest_folder:gsub("/$", "")
+
+		-- Check if destination is the source itself
+		if source_normalized == dest_normalized then
+			vim.notify("Cannot move folder into itself", vim.log.levels.WARN)
+			return
+		end
+
+		-- Check if destination is a subdirectory of source
+		if dest_normalized:sub(1, #source_normalized + 1) == source_normalized .. "/" then
+			vim.notify("Cannot move folder into its own subdirectory", vim.log.levels.WARN)
+			return
+		end
+	end
+
+	-- Get filename from source
+	local filename = vim.fn.fnamemodify(source_absolute, ":t")
+	local dest_path = dest_folder .. "/" .. filename
+
+	-- Check if destination already exists
+	if vim.fn.filereadable(dest_path) == 1 or vim.fn.isdirectory(dest_path) == 1 then
+		vim.notify("Destination already exists: " .. dest_path, vim.log.levels.ERROR)
+		return
+	end
+
+	-- Confirmation dialog
+	local dest_folder_name = vim.fn.fnamemodify(dest_folder, ":t")
+	local prompt = string.format("Move '%s' to '%s'?", source_path, dest_folder_name)
+
+	vim.ui.select({ "Yes", "No" }, {
+		prompt = prompt,
+		format_item = function(item)
+			return item
+		end,
+	}, function(choice)
+		if not choice or choice == "No" then
+			vim.notify("Move cancelled", vim.log.levels.INFO)
+			return
+		end
+
+		-- Move the file/folder
+		local success = vim.fn.rename(source_absolute, dest_path)
+		if success ~= 0 then
+			vim.notify("Failed to move: " .. source_path, vim.log.levels.ERROR)
+			return
+		end
+
+		vim.notify("Moved: " .. source_path .. " → " .. dest_folder_name .. "/" .. filename, vim.log.levels.INFO)
+
+		-- Refresh explorer
+		local picker_refresh = _G.Snacks.picker.get()
+		if picker_refresh and picker_refresh[1] and picker_refresh[1].refresh then
+			picker_refresh[1]:refresh()
+		end
+	end)
+end
+
 --- Setup function for configuration
 ---@param opts? table Optional configuration options
 function M.setup(opts)
