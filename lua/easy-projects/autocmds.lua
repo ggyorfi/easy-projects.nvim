@@ -12,6 +12,7 @@ local ui = require("easy-projects.ui")
 
 -- Track if a project is currently loaded (not just in a project directory)
 local current_loaded_project = nil
+local projectless_mode = false
 
 --- Save current project state (called by autocmds)
 local function save_current_project_state()
@@ -47,39 +48,43 @@ local function auto_load_project()
 		local args = vim.fn.argv()
 		local cwd = vim.fn.getcwd()
 
+		-- If opened with a file argument, enter projectless mode
+		if #args == 1 then
+			local arg = args[1]
+			local expanded_arg = vim.fn.expand(arg)
+
+			-- If it's NOT a directory (i.e., it's a file or doesn't exist yet), don't load any project
+			if vim.fn.isdirectory(expanded_arg) == 0 then
+				-- Projectless mode - disable tracking and don't set loaded project
+				projectless_mode = true
+				M.disable_tracking()
+				return
+			end
+		end
+
 		if #args == 0 then
 			-- Started with just `nvim` - check if current dir has .easy/easy.json (or old .easy.json)
 			local new_config_path = cwd .. "/.easy/easy.json"
 			local old_config_path = cwd .. "/.easy.json"
 
 			if vim.fn.filereadable(new_config_path) == 1 or vim.fn.filereadable(old_config_path) == 1 then
+				-- Skip if in projectless mode
+				if projectless_mode then
+					return
+				end
+
 				-- Auto-add to projects list if not already there
 				if not config.is_tracked_project(cwd) then
 					require("easy-projects.projects").add(cwd)
 				end
 				current_loaded_project = cwd
 
-				-- Get initial buffer (Neovim's default empty buffer)
-				local initial_buf = vim.api.nvim_get_current_buf()
-
 				state.restore(cwd)
-
-				-- Close the initial empty buffer if it's different and empty
-				if vim.api.nvim_buf_is_valid(initial_buf) then
-					local current_buf = vim.api.nvim_get_current_buf()
-					if initial_buf ~= current_buf then
-						local bufname = vim.api.nvim_buf_get_name(initial_buf)
-						local modified = vim.api.nvim_get_option_value("modified", { buf = initial_buf })
-						if bufname == "" and not modified then
-							pcall(vim.api.nvim_buf_delete, initial_buf, { force = true })
-						end
-					end
-				end
 			end
 		elseif #args == 1 then
-			-- Started with one argument
+			-- This code path is only for directories (files are handled above)
 			local arg = args[1]
-			local expanded_arg = vim.fn.expand(arg)
+			local expanded_arg = vim.fn.fnamemodify(vim.fn.expand(arg), ":p")
 
 			if vim.fn.isdirectory(expanded_arg) == 1 then
 				-- Check if it has .easy/easy.json or .easy.json and auto-add if not tracked
@@ -96,7 +101,6 @@ local function auto_load_project()
 				current_loaded_project = expanded_arg
 				require("easy-projects").switch_to_project(expanded_arg)
 			end
-			-- If it's a file, do nothing (normal file opening behavior)
 		end
 	end, 100)
 end

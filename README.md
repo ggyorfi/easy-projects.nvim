@@ -180,6 +180,56 @@ easy-projects.nvim/
 - **Conflict resolution** - Handles edge cases gracefully
 - **Modern UX** - Clean, intuitive dialogs
 
+## Advanced Configuration
+
+### Delaying Restore Until Lazy.nvim Finishes
+
+If you use lazy.nvim and notice that session restoration interferes with plugin installation popups, you can delay the restore process:
+
+```lua
+{
+  "yourusername/easy-projects.nvim",
+  dependencies = {
+    "ibhagwan/fzf-lua",
+  },
+  lazy = false,
+  init = function()
+    -- Delay restore until Lazy is done installing plugins
+    vim.api.nvim_create_autocmd("User", {
+      pattern = "VeryLazy",
+      callback = function()
+        -- Wait a bit more if Lazy UI is visible
+        vim.defer_fn(function()
+          local lazy_view = require("lazy.view")
+          if not lazy_view.visible() then
+            require("easy-projects").restore_session()
+          else
+            -- Keep checking until Lazy closes
+            local timer = vim.loop.new_timer()
+            timer:start(500, 500, vim.schedule_wrap(function()
+              if not lazy_view.visible() then
+                timer:stop()
+                timer:close()
+                require("easy-projects").restore_session()
+              end
+            end))
+          end
+        end, 100)
+      end,
+    })
+  end,
+  keys = {
+    -- Your keybindings here
+  },
+  opts = {},
+}
+```
+
+This ensures that:
+1. Restoration waits until the `VeryLazy` event (after plugin loading)
+2. If Lazy's UI is visible, it polls every 500ms until the UI closes
+3. Only then does it restore your session
+
 ## Troubleshooting
 
 ### "No projects configured"

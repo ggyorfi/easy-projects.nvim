@@ -361,6 +361,9 @@ function M.restore_unified(project_path)
 
 	local files_opened = 0
 	local first_buf = nil
+	local initial_buf = vim.api.nvim_get_current_buf()
+	local initial_bufname = vim.api.nvim_buf_get_name(initial_buf)
+	local initial_is_empty = initial_bufname == "" and not vim.api.nvim_get_option_value("modified", { buf = initial_buf })
 
 	-- Process all files in order
 	for _, file_entry in ipairs(project_config.files) do
@@ -401,6 +404,9 @@ function M.restore_unified(project_path)
 			-- Restore named file
 			local full_path = project_path .. "/" .. path
 
+			-- If this is the first file and we have an empty initial buffer, reuse it
+			local should_reuse_initial = initial_is_empty and files_opened == 0
+
 			if modified and file_entry.diff_hash then
 				-- File has unsaved changes - restore from diff
 				local diff_file_path = diffs_dir .. "/" .. file_entry.diff_hash .. ".diff"
@@ -436,7 +442,15 @@ function M.restore_unified(project_path)
 			else
 				-- Unmodified file - just open it
 				if utils.is_readable(full_path) then
-					vim.cmd("edit " .. utils.escape_path(full_path))
+					if should_reuse_initial then
+						-- Reuse the initial buffer instead of creating a new one
+						vim.api.nvim_buf_set_name(initial_buf, full_path)
+						vim.cmd("edit!")
+						first_buf = initial_buf
+						initial_is_empty = false
+					else
+						vim.cmd("edit " .. utils.escape_path(full_path))
+					end
 					files_opened = files_opened + 1
 				end
 			end

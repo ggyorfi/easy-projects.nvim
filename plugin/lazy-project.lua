@@ -209,6 +209,30 @@ vim.api.nvim_create_user_command("EasyMoveToFolder", function()
 	require("easy-projects").move_file_to_folder()
 end, { desc = "Move file from clipboard (use EasyYankPath) to current folder in explorer" })
 
+-- Override built-in buffer delete commands to use proper close method
+vim.api.nvim_create_user_command("Bd", function(opts)
+	local ep = require("easy-projects")
+	if opts.bang then
+		ep.force_close_tab()
+	else
+		ep.close_tab()
+	end
+end, {
+	desc = "Close buffer properly (override :bd)",
+	bang = true
+})
+
+-- Create command aliases for common buffer close commands (only when project is loaded)
+vim.cmd([[
+	cnoreabbrev <expr> bd getcmdtype() == ':' && getcmdline() == 'bd' && luaeval("require('easy-projects.autocmds').get_loaded_project() ~= nil") ? 'Bd' : 'bd'
+	cnoreabbrev <expr> bdelete getcmdtype() == ':' && getcmdline() == 'bdelete' && luaeval("require('easy-projects.autocmds').get_loaded_project() ~= nil") ? 'Bd' : 'bdelete'
+	cnoreabbrev <expr> q getcmdtype() == ':' && getcmdline() == 'q' && luaeval("require('easy-projects.autocmds').get_loaded_project() ~= nil") ? 'Bd' : 'q'
+	cnoreabbrev <expr> q! getcmdtype() == ':' && getcmdline() == 'q!' && luaeval("require('easy-projects.autocmds').get_loaded_project() ~= nil") ? 'Bd!' : 'q!'
+	cnoreabbrev <expr> wq getcmdtype() == ':' && getcmdline() == 'wq' && luaeval("require('easy-projects.autocmds').get_loaded_project() ~= nil") ? 'w\|Bd' : 'wq'
+	cnoreabbrev <expr> wq! getcmdtype() == ':' && getcmdline() == 'wq!' && luaeval("require('easy-projects.autocmds').get_loaded_project() ~= nil") ? 'w!\|Bd!' : 'wq!'
+	cnoreabbrev <expr> x getcmdtype() == ':' && getcmdline() == 'x' && luaeval("require('easy-projects.autocmds').get_loaded_project() ~= nil") ? 'x\|Bd' : 'x'
+]])
+
 -- Create autocmd group for plugin events
 vim.api.nvim_create_augroup("EasyProjects", { clear = true })
 

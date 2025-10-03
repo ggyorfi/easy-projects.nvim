@@ -266,17 +266,31 @@ end
 ---@return integer? buffer_id The empty buffer ID if created
 function M.ensure_editor_pane(files_opened)
 	if files_opened == 0 then
-		-- Check if current buffer is already a suitable empty buffer
+		-- First check if current buffer is already suitable
 		local current_buf = vim.api.nvim_get_current_buf()
 		local bufname = vim.api.nvim_buf_get_name(current_buf)
 		local buftype = vim.bo[current_buf].buftype
 
-		-- If current buffer is already an unnamed, normal buffer, use it
 		if bufname == "" and buftype == "" and not vim.bo[current_buf].modified then
 			return current_buf
 		end
 
-		-- Otherwise, create a new empty buffer
+		-- Otherwise, look for ANY existing empty buffer
+		for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+			if vim.api.nvim_buf_is_loaded(buf) then
+				local name = vim.api.nvim_buf_get_name(buf)
+				local btype = vim.bo[buf].buftype
+				local modified = vim.bo[buf].modified
+
+				if name == "" and btype == "" and not modified then
+					-- Found an existing empty buffer, switch to it
+					utils.switch_to_buffer(buf)
+					return buf
+				end
+			end
+		end
+
+		-- Only create new buffer if no empty one exists
 		local empty_buf = utils.create_empty_buffer()
 		utils.switch_to_buffer(empty_buf)
 		return empty_buf

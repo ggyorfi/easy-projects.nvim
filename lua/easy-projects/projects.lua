@@ -130,16 +130,20 @@ function M.add(project_path)
 		return false
 	end
 
+	-- Normalize the path (resolve symlinks, remove trailing slashes, etc.)
+	local normalized_path = vim.fn.fnamemodify(expanded_path, ":p:~")
+
 	local projects = config.read_projects()
 
-	-- Check if project already exists
+	-- Check if project already exists (compare normalized paths)
 	for _, existing_project in ipairs(projects) do
-		if utils.expand_path(existing_project) == expanded_path then
+		local normalized_existing = vim.fn.fnamemodify(utils.expand_path(existing_project), ":p:~")
+		if normalized_existing == normalized_path then
 			return false
 		end
 	end
 
-	table.insert(projects, project_path) -- Store original path (with ~ if provided)
+	table.insert(projects, normalized_path) -- Store normalized path
 	config.write_projects({ projects = projects })
 
 	return true

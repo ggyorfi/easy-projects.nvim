@@ -8,7 +8,7 @@ local M = {}
 ---@param path string The path to expand
 ---@return string expanded_path The expanded absolute path
 function M.expand_path(path)
-	return vim.fn.expand(path)
+	return vim.fn.fnamemodify(vim.fn.expand(path), ":p")
 end
 
 --- Check if path is a directory
